@@ -7,34 +7,30 @@
 <meta name="referrer" content="no-referrer">
 <title>Подключение</title>
 <style>
-  :root { --bg:#fafaf8; --fg:#111; --muted:#666; --card:#fff; --line:#e2e2de; --btn:#1f6f5c; --btn-fg:#fff; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#141414; --fg:#eee; --muted:#999; --card:#1e1e1e; --line:#333; --btn:#2f8f77; } }
+  :root { --bg:#fafaf8; --fg:#111; --card:#fff; --line:#e2e2de; --muted:#999; --btn:#1f6f5c; --btn-fg:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141414; --fg:#eee; --card:#1e1e1e; --line:#333; --muted:#777; --btn:#2f8f77; } }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.45 -apple-system, system-ui, sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.45 -apple-system, system-ui, sans-serif; }
   main { max-width:420px; margin:0 auto; padding:32px 16px; }
-  h1 { font-size:22px; margin:0 0 8px; }
-  p { margin:0 0 20px; color:var(--muted); }
+  #msg { margin:0 0 16px; }
   .app { display:flex; align-items:center; gap:14px; padding:12px 16px; margin:0 0 10px; border:1px solid var(--line);
-         border-radius:14px; background:var(--card); color:var(--fg); text-decoration:none; font-size:18px; font-weight:600; }
+         border-radius:14px; background:var(--card); color:var(--fg); text-decoration:none; font:inherit; }
   .app img { width:44px; height:44px; border-radius:10px; flex:none; }
-  .app::after { content:"›"; margin-left:auto; color:var(--muted); font-size:24px; font-weight:400; }
+  .app::after { content:"›"; margin-left:auto; color:var(--muted); font-size:24px; }
   .btn { display:block; width:100%; padding:14px; margin:0 0 10px; border:0; border-radius:12px; background:var(--btn);
-         color:var(--btn-fg); font-family:inherit; font-size:17px; font-weight:600; cursor:pointer; }
+         color:var(--btn-fg); font:inherit; cursor:pointer; }
   .hidden { display:none; }
   input { width:100%; padding:12px; margin:0 0 10px; border:1px solid var(--line); border-radius:10px;
           background:var(--card); color:var(--fg); font:14px ui-monospace, monospace; }
-  small { display:block; margin-top:20px; color:var(--muted); }
 </style>
 </head>
 <body>
 <main>
-  <h1 id="title">Выберите приложение</h1>
-  <p id="hint">Оно откроется и&nbsp;добавит подключение.</p>
+  <p id="msg">Выберите используемое приложение</p>
 
   <div id="apps" class="hidden">
     <a class="app" id="b-v2raytun" href="#"><img src="icons/v2raytun.png" alt="">V2RayTun</a>
     <a class="app" id="b-happ" href="#"><img src="icons/happ.png" alt="">Happ</a>
-    <small>Старое подключение после этого можно удалить.</small>
   </div>
 
   <div id="desktop" class="hidden">
@@ -44,18 +40,20 @@
 </main>
 <script>
 (function () {
-  // Link format: https://<host>/#<subId>[/v2raytun|/happ] — the fragment never reaches any server.
+  // Link format: https://<host>/#<subId>[/v2raytun|/happ|/auto] — the fragment never reaches any server.
   var SUB_BASE = 'https://panel.albertjane.ru:2096/sub/';
   var APPS = ['v2raytun', 'happ'];
   var PKG = { v2raytun: 'com.v2raytun.android', happ: 'com.happproxy' };
+  var TRY_MS = 2500; // /auto on iOS: how long to wait for the app to take over before trying the next one
 
   var $ = function (id) { return document.getElementById(id); };
-  function say(title, hint) { $('title').textContent = title; $('hint').textContent = hint; }
+  function say(text) { $('msg').textContent = text; }
 
   var parts = location.hash.slice(1).split('/');
-  var subId = parts[0], chosen = APPS.indexOf(parts[1]) >= 0 ? parts[1] : null;
+  var subId = parts[0], mode = parts[1] || '';
+  var chosen = APPS.indexOf(mode) >= 0 ? mode : null;
   if (!/^[a-z0-9]{8,32}$/.test(subId)) {
-    say('Ссылка неполная', 'Попросите прислать её ещё раз.');
+    say('Ссылка неполная, попросите прислать её ещё раз');
     return;
   }
 
@@ -65,7 +63,7 @@
   var isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
 
   if (!isAndroid && !isIOS) {
-    say('Адрес подписки', 'Скопируйте его и добавьте в приложение: «+» → импорт из буфера обмена.');
+    say('Скопируйте адрес и добавьте его в приложение через «+»');
     $('sub').value = subUrl;
     $('copy').onclick = function () {
       $('sub').select();
@@ -91,11 +89,28 @@
   function link(app) { return isAndroid ? intent(app, 'none') : deep[app]; }
 
   APPS.forEach(function (app) { $('b-' + app).href = link(app); });
-  $('apps').classList.remove('hidden');
 
   var step = new URLSearchParams(location.search).get('step');
   if (step === 'none') {
-    say('Приложение не найдено', 'Установите V2RayTun или Happ и откройте ссылку снова.');
+    say('Приложение не найдено, установите V2RayTun или Happ');
+    $('apps').classList.remove('hidden');
+    return;
+  }
+
+  // Experimental iOS probe (#subId/auto): open each app in turn; a missing one makes Safari show an error,
+  // so the page moves on only if it is still visible after TRY_MS.
+  $('apps').classList.remove('hidden');
+
+  if (mode === 'auto' && isIOS) {
+    var left = false;
+    document.addEventListener('visibilitychange', function () { if (document.hidden) left = true; });
+    window.addEventListener('pagehide', function () { left = true; });
+    var i = 0;
+    (function next() {
+      if (left || i >= APPS.length) return;
+      location.href = deep[APPS[i++]];
+      setTimeout(next, TRY_MS);
+    })();
     return;
   }
 
@@ -106,10 +121,7 @@
   } else if (isAndroid) {
     auto = step === 'happ' ? intent('happ', 'none') : intent('v2raytun', 'happ');
   }
-  if (auto) {
-    say('Открываем приложение…', 'Если не открылось, нажмите на своё приложение.');
-    setTimeout(function () { location.href = auto; }, 150);
-  }
+  if (auto) setTimeout(function () { location.href = auto; }, 150);
 })();
 </script>
 </body>
