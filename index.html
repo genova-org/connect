@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Подключение</title>
+<style>
+  :root { --bg:#fafaf8; --fg:#111; --muted:#666; --btn:#1f6f5c; --btn-fg:#fff; --line:#ddd; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141414; --fg:#eee; --muted:#999; --btn:#2f8f77; --line:#333; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.45 -apple-system, system-ui, sans-serif; }
+  main { max-width:420px; margin:0 auto; padding:32px 16px; }
+  h1 { font-size:22px; margin:0 0 8px; }
+  p { margin:0 0 16px; color:var(--muted); }
+  a.btn { display:block; text-align:center; padding:14px; margin:0 0 10px; border-radius:12px;
+          background:var(--btn); color:var(--btn-fg); text-decoration:none; font-weight:600; }
+  a.alt { background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:500; }
+  .hidden { display:none; }
+  small { display:block; margin-top:20px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title">Открываем приложение…</h1>
+  <p id="hint">Если ничего не произошло, нажмите кнопку своего приложения.</p>
+  <div id="buttons" class="hidden">
+    <a class="btn" id="b-v2raytun" href="#">Открыть в V2RayTun</a>
+    <a class="btn" id="b-happ" href="#">Открыть в Happ</a>
+    <p style="margin-top:20px">Приложения нет? Установите V2RayTun и вернитесь к этой ссылке:</p>
+    <a class="btn alt" id="b-store" href="#">Установить V2RayTun</a>
+  </div>
+  <small>После добавления настройки обновляются сами. Старое подключение в приложении можно удалить.</small>
+</main>
+<script>
+(function () {
+  // Link format: https://<host>/#<subId>  — the fragment never reaches any server.
+  var SUB_BASE = 'https://panel.albertjane.ru:2096/sub/';
+  var STORE = {
+    ios: 'https://apps.apple.com/app/v2raytun/id6476628951',
+    android: 'https://play.google.com/store/apps/details?id=com.v2raytun.android'
+  };
+  var PKG = { v2raytun: 'com.v2raytun.android', happ: 'com.happproxy' };
+
+  var subId = location.hash.slice(1);
+  var $ = function (id) { return document.getElementById(id); };
+  if (!/^[a-z0-9]{8,32}$/.test(subId)) {
+    $('title').textContent = 'Ссылка неполная';
+    $('hint').textContent = 'Попросите прислать ссылку ещё раз.';
+    return;
+  }
+
+  var subUrl = SUB_BASE + subId;
+  var deep = {
+    v2raytun: 'v2raytun://import/' + subUrl,
+    happ: 'happ://add/' + encodeURIComponent(subUrl)
+  };
+  var ua = navigator.userAgent;
+  var isAndroid = /Android/i.test(ua);
+  var step = new URLSearchParams(location.search).get('step');
+
+  // Android: intent:// opens the app if installed, otherwise the browser goes to the fallback URL.
+  function intent(app) {
+    var rest = deep[app].replace(/^[a-z0-9]+:\/\//, '');
+    var next = location.origin + location.pathname + '?step=' + (app === 'v2raytun' ? 'happ' : 'none') + '#' + subId;
+    return 'intent://' + rest + '#Intent;scheme=' + app + ';package=' + PKG[app] +
+           ';S.browser_fallback_url=' + encodeURIComponent(next) + ';end';
+  }
+
+  $('b-v2raytun').href = isAndroid ? intent('v2raytun') : deep.v2raytun;
+  $('b-happ').href = isAndroid ? intent('happ') : deep.happ;
+  $('b-store').href = isAndroid ? STORE.android : STORE.ios;
+
+  function showButtons(title) {
+    if (title) $('title').textContent = title;
+    $('buttons').classList.remove('hidden');
+  }
+
+  if (step === 'none') { showButtons('Приложение не найдено'); return; }
+
+  // Auto-attempt: Android walks V2RayTun → Happ → store; iOS cannot detect apps, so it tries V2RayTun.
+  var first = isAndroid ? intent(step === 'happ' ? 'happ' : 'v2raytun') : deep.v2raytun;
+  setTimeout(function () { location.href = first; }, 150);
+  setTimeout(function () { if (!document.hidden) showButtons(); }, 1800);
+})();
+</script>
+</body>
+</html>
