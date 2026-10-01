@@ -19,6 +19,7 @@
   .app::after { content:"›"; margin-left:auto; color:var(--muted); font-size:24px; }
   .btn { display:block; width:100%; padding:14px; margin:0 0 10px; border:0; border-radius:12px; background:var(--btn);
          color:var(--btn-fg); font:inherit; cursor:pointer; }
+  .note { margin:16px 0 0; font-size:15px; }
   .hidden { display:none; }
   input { width:100%; padding:12px; margin:0 0 10px; border:1px solid var(--line); border-radius:10px;
           background:var(--card); color:var(--fg); font:14px ui-monospace, monospace; }
@@ -33,6 +34,12 @@
     <a class="app" id="b-happ" href="#"><img src="icons/happ.png" alt="">Happ</a>
   </div>
 
+  <div id="karing" class="hidden">
+    <a class="app" href="https://apps.apple.com/ru/app/karing/id6472431552"><img src="icons/karing.png" alt="">1. Скачать Karing</a>
+    <a class="app" id="b-karing" href="#"><img src="icons/karing.png" alt="">2. Добавить подписку</a>
+    <p class="note">3. В Karing: Настройки → О Karing → выключите «Использовать данные для улучшения приложения»</p>
+  </div>
+
   <div id="desktop" class="hidden">
     <input id="sub" readonly>
     <button class="btn" id="copy" type="button">Скопировать</button>
@@ -40,8 +47,9 @@
 </main>
 <script>
 (function () {
-  // Link format: https://<host>/#<subId>[/v2raytun|/happ|/auto (iOS: V2RayTun only)] — the fragment never reaches any server.
+  // Link format: https://<host>/#<subId>[/v2raytun|/happ|/karing|/auto (iOS: V2RayTun only)] — the fragment never reaches any server.
   var SUB_BASE = 'https://panel.albertjane.ru:2096/sub/';
+  var SUB_NAME = 'Germany-Alb'; // profile name for Karing, same as the panel's subTitle
   var APPS = ['v2raytun', 'happ'];
   var PKG = { v2raytun: 'com.v2raytun.android', happ: 'com.happproxy' };
 
@@ -78,6 +86,16 @@
     v2raytun: 'v2raytun://import/' + subUrl,
     happ: 'happ://add/' + encodeURIComponent(subUrl)
   };
+
+  // #subId/karing on iOS: Karing is in the Russian App Store, V2RayTun and Happ are not. No auto-open — the app
+  // may not be installed yet. Karing is not on Google Play, so Android falls through to the usual chain.
+  if (mode === 'karing' && isIOS) {
+    say('Установите Karing и добавьте подписку');
+    $('b-karing').href = 'karing://install-config?url=' + encodeURIComponent(subUrl) +
+                         '&name=' + encodeURIComponent(SUB_NAME);
+    $('karing').classList.remove('hidden');
+    return;
+  }
 
   // Android: intent:// opens the app if installed, otherwise the browser comes back with ?step=<next>.
   function intent(app, next) {
