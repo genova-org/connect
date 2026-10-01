@@ -40,11 +40,10 @@
 </main>
 <script>
 (function () {
-  // Link format: https://<host>/#<subId>[/v2raytun|/happ|/auto] — the fragment never reaches any server.
+  // Link format: https://<host>/#<subId>[/v2raytun|/happ|/auto (iOS: V2RayTun only)] — the fragment never reaches any server.
   var SUB_BASE = 'https://panel.albertjane.ru:2096/sub/';
   var APPS = ['v2raytun', 'happ'];
   var PKG = { v2raytun: 'com.v2raytun.android', happ: 'com.happproxy' };
-  var TRY_MS = 2500; // /auto on iOS: how long to wait for the app to take over before trying the next one
 
   var $ = function (id) { return document.getElementById(id); };
   function say(text) { $('msg').textContent = text; }
@@ -97,27 +96,16 @@
     return;
   }
 
-  // Experimental iOS probe (#subId/auto): open each app in turn; a missing one makes Safari show an error,
-  // so the page moves on only if it is still visible after TRY_MS.
   $('apps').classList.remove('hidden');
 
-  if (mode === 'auto' && isIOS) {
-    var left = false;
-    document.addEventListener('visibilitychange', function () { if (document.hidden) left = true; });
-    window.addEventListener('pagehide', function () { left = true; });
-    var i = 0;
-    (function next() {
-      if (left || i >= APPS.length) return;
-      location.href = deep[APPS[i++]];
-      setTimeout(next, TRY_MS);
-    })();
-    return;
-  }
-
-  // Auto-open only where it cannot show an error: the app named in the link, or Android's intent chain.
+  // Auto-open: the app named in the link; #subId/auto on iOS opens V2RayTun only — iOS's "Open in app?"
+  // prompt keeps the page visible, so a page cannot tell it from "not installed" and must not move on to Happ.
+  // Android's intent chain falls back to Happ only when V2RayTun is really missing.
   var auto = null;
   if (chosen) {
     auto = link(chosen);
+  } else if (mode === 'auto' && isIOS) {
+    auto = deep.v2raytun;
   } else if (isAndroid) {
     auto = step === 'happ' ? intent('happ', 'none') : intent('v2raytun', 'happ');
   }
